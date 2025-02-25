@@ -31,9 +31,7 @@ class data_serialiser:
         self.identifiers: list[int] = []
         self.base_iden = base_iden
 
-        self.relationship_sources: list[int] = []
-        self.relationship_destins: list[int] = []
-        self.relationship_destin_types: list[str] = []
+        self.relationships: set[tuple[int, int, str]] = set()
 
         for item in item_list:
             type_key: str = item['type']
@@ -44,9 +42,11 @@ class data_serialiser:
             item_iden: int = int(item['id'])
             self.attributes[type_key][self.IDEN_FIELD].append(item_iden)
 
-            self.relationship_sources.append(base_iden)
-            self.relationship_destins.append(item_iden)
-            self.relationship_destin_types.append(type_key)
+            self.relationships.add((
+                base_iden,
+                item_iden,
+                type_key,
+            ))
 
             attributes: dict[str, Any] = item['attributes']
             for field in self.attribute_names[type_key]:
@@ -62,13 +62,21 @@ class data_serialiser:
                 related_item_data = related_item['data']
                 if not isinstance(related_item_data, dict) or 'id' not in related_item_data:
                     continue
-                self.relationship_sources.append(base_iden)
-                self.relationship_destins.append(
-                    int(related_item_data['id'])
-                )
-                self.relationship_destin_types.append(
-                    related_item_data['type']
-                )
+                self.relationships.add((
+                    base_iden,
+                    int(related_item_data['id']),
+                    related_item_data['type'],
+                ))
+
+        (
+            self.relationship_sources,
+            self.relationship_destins,
+            self.relationship_destin_types
+        ) = (
+            zip(*self.relationships)
+            if len(self.relationships) else
+            ((), (), ())
+        )
 
 
 def refresh_headers() -> None:
@@ -209,7 +217,7 @@ class database(base.lambda_database[data_serialiser]):
         'RELATIONSHIPS': {
             'Source Identifier': {
                 'func': lambda iden, entry: entry.relationship_sources,
-                'type': 'integer primary key',
+                'type': 'integer',
             },
             'Destination Identifier': {
                 'func': lambda iden, entry: entry.relationship_destins,
